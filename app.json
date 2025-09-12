@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.doggy-dating-walk-tracker",
+      "bundleIdentifier": "app.rork.doggydatingwalktracker",
       "config": {
         "googleMapsApiKey": "AIzaSyDZoatUsFWRicRfJcDbmLKNnB-c-lNSokc"
       },
@@ -36,7 +36,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.doggy-dating-walk-tracker",
+      "package": "app.rork.doggydatingwalktracker",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyDZoatUsFWRicRfJcDbmLKNnB-c-lNSokc"
@@ -84,7 +84,9 @@
         {
           "photosPermission": "The app accesses your photos to let you share them with your friends."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
