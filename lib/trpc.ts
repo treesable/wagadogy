@@ -1,0 +1,270 @@
+import { createTRPCReact } from "@trpc/react-query";
+import { httpLink } from "@trpc/client";
+import type { AppRouter } from "@/backend/trpc/app-router";
+import superjson from "superjson";
+import { createClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export const trpc = createTRPCReact<AppRouter>();
+
+const getBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  }
+
+  throw new Error(
+    "No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL"
+  );
+};
+
+// Create a function to get the auth token
+const getAuthToken = async () => {
+  try {
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.log('[getAuthToken] Missing Supabase environment variables');
+      return null;
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: AsyncStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+      },
+    });
+    
+    // First try to get the current session
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('[getAuthToken] Error getting session:', error);
+      console.error('[getAuthToken] Session error details:', {
+        message: error.message,
+        status: error.status,
+        name: error.name
+      });
+      return null;
+    }
+    
+    if (!session) {
+      console.log('[getAuthToken] No session found - user needs to sign in');
+      return null;
+    }
+    
+    if (!session.access_token) {
+      console.log('[getAuthToken] Session exists but no access token - invalid session');
+      return null;
+    }
+    
+    // For development, allow both confirmed and unconfirmed users
+    // In production, you should enforce email confirmation here
+    if (!session.user?.email_confirmed_at) {
+      console.log('[getAuthToken] User not confirmed, but allowing for development');
+      console.log('[getAuthToken] In production, you should require email confirmation');
+    }
+    
+    const token = session.access_token;
+    console.log('[getAuthToken] Token exists:', !!token, 'Token length:', token?.length || 0);
+    console.log('[getAuthToken] User ID:', session.user?.id);
+    console.log('[getAuthToken] User email:', session.user?.email);
+    console.log('[getAuthToken] User confirmed:', !!session.user?.email_confirmed_at);
+    console.log('[getAuthToken] Token expires at:', session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'never');
+    
+    // Verify token is not expired (with 5 minute buffer)
+    const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
+    if (session.expires_at && (session.expires_at * 1000 - bufferTime) < Date.now()) {
+      console.log('[getAuthToken] Token is expired or expiring soon, attempting refresh');
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshedSession) {
+        console.error('[getAuthToken] Failed to refresh token:', refreshError);
+        console.error('[getAuthToken] Refresh error details:', {
+          message: refreshError?.message,
+          status: refreshError?.status,
+          name: refreshError?.name
+        });
+        return null;
+      }
+      
+      if (!refreshedSession.access_token) {
+        console.error('[getAuthToken] Refreshed session has no access token');
+        return null;
+      }
+      
+      console.log('[getAuthToken] Token refreshed successfully');
+      console.log('[getAuthToken] New token expires at:', refreshedSession.expires_at ? new Date(refreshedSession.expires_at * 1000).toISOString() : 'never');
+      return refreshedSession.access_token;
+    }
+    
+    console.log('[getAuthToken] Using existing valid token');
+    return token;
+  } catch (error: any) {
+    console.error('[getAuthToken] Exception getting auth token:', error);
+    console.error('[getAuthToken] Exception details:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.substring(0, 500)
+    });
+    return null;
+  }
+};
+
+// Create a function to create tRPC client with auth
+export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
+  const baseUrl = getBaseUrl();
+  const fullUrl = `${baseUrl}/api/trpc`;
+  
+  console.log('[createTRPCClient] Base URL:', baseUrl);
+  console.log('[createTRPCClient] Full tRPC URL:', fullUrl);
+  
+  return trpc.createClient({
+    links: [
+      httpLink({
+        url: fullUrl,
+        transformer: superjson,
+        headers: async () => {
+          try {
+            const token = getToken ? await getToken() : await getAuthToken();
+            console.log('[tRPC Headers] Token exists:', !!token);
+            console.log('[tRPC Headers] Token length:', token?.length || 0);
+            console.log('[tRPC Headers] Token preview:', token ? token.substring(0, 20) + '...' : 'null');
+            
+            if (!token) {
+              console.log('[tRPC Headers] No token available - requests will be unauthenticated');
+              return {};
+            }
+            
+            const headers = {
+              authorization: `Bearer ${token}`,
+            };
+            
+            console.log('[tRPC Headers] Final headers:', {
+              ...headers,
+              authorization: headers.authorization ? headers.authorization.substring(0, 20) + '...' : undefined
+            });
+            
+            return headers;
+          } catch (error) {
+            console.error('[tRPC Headers] Error getting auth headers:', error);
+            return {};
+          }
+        },
+        fetch: async (url, options) => {
+          console.log('[tRPC Fetch] Making request to:', url);
+          console.log('[tRPC Fetch] Request options:', {
+            method: options?.method,
+            headers: options?.headers ? Object.keys(options.headers) : [],
+            bodyLength: options?.body ? (typeof options.body === 'string' ? options.body.length : 'non-string') : 0
+          });
+          
+          try {
+            const response = await fetch(url, options);
+            console.log('[tRPC Fetch] Response status:', response.status);
+            console.log('[tRPC Fetch] Response ok:', response.ok);
+            console.log('[tRPC Fetch] Response headers:', Object.fromEntries(response.headers.entries()));
+            
+            // Clone response to read body multiple times if needed
+            const responseClone = response.clone();
+            
+            if (!response.ok) {
+              let errorText = '';
+              try {
+                errorText = await response.text();
+              } catch (textError) {
+                console.error('[tRPC Fetch] Failed to read error response text:', textError);
+                errorText = 'Failed to read error response';
+              }
+              
+              console.error('[tRPC Fetch] Error response body (first 1000 chars):', errorText.substring(0, 1000));
+              
+              // Handle authentication errors specifically
+              if (response.status === 401) {
+                console.error('[tRPC Fetch] Authentication error (401) - token may be invalid or expired');
+                throw new Error('Authentication required. Please sign in again.');
+              }
+              
+              // If we get HTML instead of JSON, it's likely a 404 or server error
+              if (errorText.includes('<html>') || errorText.includes('<!DOCTYPE')) {
+                console.error('[tRPC Fetch] Server returned HTML - likely 404 or server error');
+                throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}. This usually means the API endpoint is not found or the server is not running.`);
+              }
+              
+              // Try to parse as JSON to provide better error messages
+              try {
+                const errorJson = JSON.parse(errorText);
+                console.error('[tRPC Fetch] Parsed error JSON:', errorJson);
+                
+                // Extract meaningful error message from tRPC error format
+                if (errorJson.error && errorJson.error.message) {
+                  throw new Error(errorJson.error.message);
+                } else if (errorJson.message) {
+                  throw new Error(errorJson.message);
+                } else {
+                  throw new Error(`HTTP ${response.status}: ${JSON.stringify(errorJson)}`);
+                }
+              } catch (parseError) {
+                console.error('[tRPC Fetch] Failed to parse error as JSON:', parseError);
+                // If it's not valid JSON, just return the text
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+              }
+            }
+            
+            // For successful responses, validate that it's JSON
+            const contentType = response.headers.get('content-type');
+            console.log('[tRPC Fetch] Response content-type:', contentType);
+            
+            if (contentType && !contentType.includes('application/json')) {
+              console.warn('[tRPC Fetch] Response is not JSON, content-type:', contentType);
+              const text = await responseClone.text();
+              console.warn('[tRPC Fetch] Non-JSON response body (first 500 chars):', text.substring(0, 500));
+              
+              if (text.includes('<html>') || text.includes('<!DOCTYPE')) {
+                console.error('[tRPC Fetch] Server returned HTML for successful response');
+                throw new Error(`Server returned HTML instead of JSON. This usually means the API endpoint is not found or the server is not running properly.`);
+              }
+            }
+            
+            // Log successful response for debugging
+            if (response.ok) {
+              console.log('[tRPC Fetch] Request successful');
+            }
+            
+            return response;
+          } catch (error: any) {
+            console.error('[tRPC Fetch] Network error:', error);
+            console.error('[tRPC Fetch] Error details:', {
+              message: error?.message,
+              name: error?.name,
+              cause: error?.cause,
+              stack: error?.stack?.substring(0, 500)
+            });
+            
+            // Provide more specific error messages
+            if (error?.message?.includes('JSON Parse error') || error?.message?.includes('Unexpected character')) {
+              console.error('[tRPC Fetch] JSON parse error detected');
+              throw new Error('Server returned invalid JSON. The API may not be running correctly or there may be a configuration issue.');
+            }
+            
+            if (error?.message?.includes('Network request failed') || error?.message?.includes('fetch')) {
+              console.error('[tRPC Fetch] Network connectivity issue');
+              throw new Error('Network connection error. Please check your internet connection.');
+            }
+            
+            if (error?.message?.includes('Authentication required')) {
+              console.error('[tRPC Fetch] Authentication error detected');
+              throw new Error('Authentication required. Please sign in again.');
+            }
+            
+            // Re-throw the error with additional context
+            throw new Error(`Network error: ${error?.message || 'Unknown error occurred'}`);
+          }
+        },
+      }),
+    ],
+  });
+};
+
+// Default client for backward compatibility
+export const trpcClient = createTRPCClient();

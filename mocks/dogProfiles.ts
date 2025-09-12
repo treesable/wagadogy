@@ -1,0 +1,108 @@
+import { DogProfile } from "@/types/app";
+
+export const mockDogProfiles: DogProfile[] = [
+  {
+    id: "1",
+    name: "Luna",
+    age: "2 years",
+    breed: "Labrador Mix",
+    size: "Large",
+    photos: [
+      "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800",
+    ],
+    bio: "Energetic lab who loves playing fetch and making new friends at the dog park!",
+    distance: "0.8 miles",
+    ownerName: "Sarah Johnson",
+  },
+  {
+    id: "2",
+    name: "Charlie",
+    age: "4 years",
+    breed: "French Bulldog",
+    size: "Small",
+    photos: [
+      "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=800",
+    ],
+    bio: "Chill frenchie who enjoys short walks and lots of cuddles. Great with other small dogs!",
+    distance: "1.2 miles",
+    ownerName: "Mike Chen",
+  },
+  {
+    id: "3",
+    name: "Bella",
+    age: "3 years",
+    breed: "German Shepherd",
+    size: "Large",
+    photos: [
+      "https://images.unsplash.com/photo-1568572933382-74d440642117?w=800",
+    ],
+    bio: "Smart and loyal shepherd looking for active playmates. Loves hiking and agility training!",
+    distance: "2.5 miles",
+    ownerName: "Emma Wilson",
+  },
+  {
+    id: "4",
+    name: "Cooper",
+    age: "1 year",
+    breed: "Golden Doodle",
+    size: "Medium",
+    photos: [
+      "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=800",
+    ],
+    bio: "Playful doodle puppy with endless energy! Loves everyone and everything!",
+    distance: "0.5 miles",
+    ownerName: "David Martinez",
+  },
+  {
+    id: "5",
+    name: "Daisy",
+    age: "5 years",
+    breed: "Beagle",
+    size: "Medium",
+    photos: [
+      "https://images.unsplash.com/photo-1505628346881-b72b27e84530?w=800",
+    ],
+    bio: "Sweet beagle who loves sniffing adventures and gentle play. Great with kids!",
+    distance: "1.8 miles",
+    ownerName: "Lisa Anderson",
+  },
+  {
+    id: "6",
+    name: "Rocky",
+    age: "2 years",
+    breed: "Pit Bull Mix",
+    size: "Large",
+    photos: [
+      "https://images.unsplash.com/photo-1565708097881-bbf4ecf47cc1?w=800",
+    ],
+    bio: "Gentle giant who loves belly rubs and playing tug-of-war. Don't let the muscles fool you!",
+    distance: "3.0 miles",
+    ownerName: "James Taylor",
+  },
+  {
+    id: "7",
+    name: "Milo",
+    age: "6 months",
+    breed: "Corgi",
+    size: "Small",
+    photos: [
+      "https://images.unsplash.com/photo-1546975490-e8b92a360b24?w=800",
+    ],
+    bio: "Adorable corgi puppy learning to socialize. Short legs, big personality!",
+    distance: "1.5 miles",
+    ownerName: "Rachel Green",
+  },
+  {
+    id: "8",
+    name: "Sadie",
+    age: "4 years",
+    breed: "Australian Shepherd",
+    size: "Medium",
+    photos: [
+      "https://images.unsplash.com/photo-1542587227-8802646a854d?w=800",
+    ],
+    bio: "Smart aussie who needs mental stimulation. Loves frisbee and agility courses!",
+    distance: "2.2 miles",
+    ownerName: "Tom Harris",
+  },
+];
