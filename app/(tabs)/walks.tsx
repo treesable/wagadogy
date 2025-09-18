@@ -183,6 +183,7 @@ export default function WalksScreen() {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0, // Always refetch to get latest data
+
     retry: (failureCount: number, error: any) => {
       console.log(`[WalksScreen] getUserStats retry attempt ${failureCount}`, error?.message);
       // Don't retry on authentication errors
@@ -190,9 +191,9 @@ export default function WalksScreen() {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 2; // Reduce retry attempts
+      return failureCount < 3; // Allow more retry attempts
     },
-    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 10000)
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 5000)
   });
   
   const { data: walkStats, isLoading: walkStatsLoading, error: walkStatsError, refetch: refetchWalkStats } = trpc.walks.getStats.useQuery({
@@ -203,6 +204,7 @@ export default function WalksScreen() {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0,
+
     retry: (failureCount, error: any) => {
       console.log(`[WalksScreen] getStats retry attempt ${failureCount}`, error?.message);
       // Don't retry on authentication errors
@@ -210,9 +212,9 @@ export default function WalksScreen() {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 2; // Reduce retry attempts
+      return failureCount < 3; // Allow more retry attempts
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000)
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000)
   });
   
   // Fetch scheduled walks from database
@@ -226,15 +228,16 @@ export default function WalksScreen() {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0,
+
     retry: (failureCount, error: any) => {
       console.log(`[WalksScreen] getSchedules retry attempt ${failureCount}`, error?.message);
       if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required')) {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 2;
+      return failureCount < 3;
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000)
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000)
   });
 
   // Transform database scheduled walks to local format
@@ -265,6 +268,15 @@ export default function WalksScreen() {
       console.log('[WalksScreen] Screen focused, refetching data...');
       if (user && session && session.access_token) {
         console.log('[WalksScreen] User authenticated with valid token, refetching data');
+        console.log('[WalksScreen] Session expires at:', session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'never');
+        console.log('[WalksScreen] Session is expired:', session.expires_at ? (session.expires_at * 1000) < Date.now() : false);
+        
+        // Check if session is expired before refetching
+        if (session.expires_at && (session.expires_at * 1000) < Date.now()) {
+          console.log('[WalksScreen] Session expired, not refetching data');
+          return;
+        }
+        
         // Add small delay to ensure auth state is stable
         setTimeout(() => {
           refetchUserStats();
@@ -295,14 +307,23 @@ export default function WalksScreen() {
       console.log('[WalksScreen] User exists:', !!user);
       console.log('[WalksScreen] Session exists:', !!session);
       console.log('[WalksScreen] Session access token exists:', !!session?.access_token);
+      console.log('[WalksScreen] Session expires at:', session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'never');
+      console.log('[WalksScreen] Session is expired:', session?.expires_at ? (session.expires_at * 1000) < Date.now() : false);
       
       if (user && session && session.access_token) {
+        // Check if session is expired
+        if (session.expires_at && (session.expires_at * 1000) < Date.now()) {
+          console.log('[WalksScreen] Session expired, not refetching data');
+          return;
+        }
+        
         console.log('[WalksScreen] User authenticated with valid session, refetching data');
         // Add small delay to ensure auth state is stable
         setTimeout(() => {
-          refetchUserStats();
-          refetchWalkStats();
-          refetchScheduledWalks();
+          console.log('[WalksScreen] Executing refetch operations...');
+          refetchUserStats().catch(err => console.error('[WalksScreen] Error refetching user stats:', err));
+          refetchWalkStats().catch(err => console.error('[WalksScreen] Error refetching walk stats:', err));
+          refetchScheduledWalks().catch(err => console.error('[WalksScreen] Error refetching scheduled walks:', err));
         }, 200);
       } else {
         console.log('[WalksScreen] User not authenticated or session invalid, skipping refetch');
@@ -358,16 +379,24 @@ export default function WalksScreen() {
     console.log('[WalksScreen] Session details:', {
       hasAccessToken: !!session?.access_token,
       expiresAt: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
-      isExpired: session?.expires_at ? (session.expires_at * 1000) < Date.now() : null
+      isExpired: session?.expires_at ? (session.expires_at * 1000) < Date.now() : null,
+      tokenLength: session?.access_token?.length || 0
     });
     
     if (user && session && session.access_token) {
+      // Check if session is expired
+      if (session.expires_at && (session.expires_at * 1000) < Date.now()) {
+        console.log('[WalksScreen] Session expired, not triggering refetch');
+        return;
+      }
+      
       console.log('[WalksScreen] User authenticated with valid session, queries should be enabled');
       // Trigger a fresh fetch when auth state becomes valid
       setTimeout(() => {
-        refetchUserStats();
-        refetchWalkStats();
-        refetchScheduledWalks();
+        console.log('[WalksScreen] Triggering auth state change refetch...');
+        refetchUserStats().catch(err => console.error('[WalksScreen] Auth change - Error refetching user stats:', err));
+        refetchWalkStats().catch(err => console.error('[WalksScreen] Auth change - Error refetching walk stats:', err));
+        refetchScheduledWalks().catch(err => console.error('[WalksScreen] Auth change - Error refetching scheduled walks:', err));
       }, 300);
     } else {
       console.log('[WalksScreen] User not authenticated or session invalid, queries should be disabled');
