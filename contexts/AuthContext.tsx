@@ -56,10 +56,13 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         if (isRefreshTokenError(error)) {
           console.log('Invalid refresh token detected, clearing session...');
           await handleRefreshTokenError(supabase);
+          setSession(null);
+          setUser(null);
         }
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
       }
-      setSession(session);
-      setUser(session?.user ?? null);
       setLoading(false);
     });
 

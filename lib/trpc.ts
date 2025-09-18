@@ -33,6 +33,7 @@ const getAuthToken = async () => {
         storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
+        detectSessionInUrl: false, // Disable for mobile
       },
     });
     
@@ -45,6 +46,14 @@ const getAuthToken = async () => {
         status: error.status,
         name: error.name
       });
+      
+      // If it's a refresh token error, clear the session and return null
+      if (error.message?.includes('Invalid Refresh Token') || error.message?.includes('refresh_token_not_found')) {
+        console.log('[getAuthToken] Invalid refresh token detected, clearing session');
+        await supabase.auth.signOut();
+        return null;
+      }
+      
       return null;
     }
     
@@ -76,26 +85,39 @@ const getAuthToken = async () => {
     const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
     if (session.expires_at && (session.expires_at * 1000 - bufferTime) < Date.now()) {
       console.log('[getAuthToken] Token is expired or expiring soon, attempting refresh');
-      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
       
-      if (refreshError || !refreshedSession) {
-        console.error('[getAuthToken] Failed to refresh token:', refreshError);
-        console.error('[getAuthToken] Refresh error details:', {
-          message: refreshError?.message,
-          status: refreshError?.status,
-          name: refreshError?.name
-        });
+      try {
+        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError) {
+          console.error('[getAuthToken] Failed to refresh token:', refreshError);
+          console.error('[getAuthToken] Refresh error details:', {
+            message: refreshError?.message,
+            status: refreshError?.status,
+            name: refreshError?.name
+          });
+          
+          // If refresh fails, sign out and return null
+          if (refreshError.message?.includes('Invalid Refresh Token') || refreshError.message?.includes('refresh_token_not_found')) {
+            console.log('[getAuthToken] Invalid refresh token during refresh, signing out');
+            await supabase.auth.signOut();
+          }
+          
+          return null;
+        }
+        
+        if (!refreshedSession || !refreshedSession.access_token) {
+          console.error('[getAuthToken] Refreshed session has no access token');
+          return null;
+        }
+        
+        console.log('[getAuthToken] Token refreshed successfully');
+        console.log('[getAuthToken] New token expires at:', refreshedSession.expires_at ? new Date(refreshedSession.expires_at * 1000).toISOString() : 'never');
+        return refreshedSession.access_token;
+      } catch (refreshException) {
+        console.error('[getAuthToken] Exception during token refresh:', refreshException);
         return null;
       }
-      
-      if (!refreshedSession.access_token) {
-        console.error('[getAuthToken] Refreshed session has no access token');
-        return null;
-      }
-      
-      console.log('[getAuthToken] Token refreshed successfully');
-      console.log('[getAuthToken] New token expires at:', refreshedSession.expires_at ? new Date(refreshedSession.expires_at * 1000).toISOString() : 'never');
-      return refreshedSession.access_token;
     }
     
     console.log('[getAuthToken] Using existing valid token');

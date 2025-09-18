@@ -192,9 +192,9 @@ export default function WalksScreen() {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 3; // Allow more retry attempts
+      return failureCount < 2; // Reduce retry attempts to avoid excessive requests
     },
-    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 5000)
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 3000)
   });
   
   const { data: walkStats, isLoading: walkStatsLoading, error: walkStatsError, refetch: refetchWalkStats } = trpc.walks.getStats.useQuery({
@@ -368,6 +368,15 @@ export default function WalksScreen() {
     console.log('[WalksScreen] Component mounted, queries should start automatically');
     console.log('[WalksScreen] User authenticated:', !!user && !!session && !!session?.access_token);
     console.log('[WalksScreen] Stats loading:', statsLoading, 'Walk stats loading:', walkStatsLoading);
+    
+    // If we have authentication issues, try to clear and re-authenticate
+    if (user && session && !session.access_token) {
+      console.log('[WalksScreen] Session exists but no access token - clearing session');
+      // This will trigger a re-authentication
+      setTimeout(() => {
+        router.push('/login');
+      }, 1000);
+    }
   }, [statsLoading, walkStatsLoading, user, session]);
 
   // Log loading state changes
@@ -689,7 +698,6 @@ export default function WalksScreen() {
                     {!user || !session || !session?.access_token ? 'Sign In' : 
                      session.expires_at && (session.expires_at * 1000) < Date.now() ? 'Expired' :
                      statsLoading ? '...' : 
-                     statsError ? 'Error' : 
                      (userStats?.total_duration_minutes ?? 0)}
                   </Text>
                   <Text style={styles.statLabel}>Minutes Total</Text>
@@ -716,7 +724,6 @@ export default function WalksScreen() {
                     {!user || !session || !session?.access_token ? 'Sign In' : 
                      session.expires_at && (session.expires_at * 1000) < Date.now() ? 'Expired' :
                      statsLoading ? '...' : 
-                     statsError ? 'Error' : 
                      (userStats?.total_distance_km?.toFixed(1) ?? '0.0')}
                   </Text>
                   <Text style={styles.statLabel}>Total km</Text>
