@@ -33,7 +33,6 @@ const getAuthToken = async () => {
         storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false, // Disable for mobile
       },
     });
     
@@ -46,14 +45,6 @@ const getAuthToken = async () => {
         status: error.status,
         name: error.name
       });
-      
-      // If it's a refresh token error, clear the session and return null
-      if (error.message?.includes('Invalid Refresh Token') || error.message?.includes('refresh_token_not_found')) {
-        console.log('[getAuthToken] Invalid refresh token detected, clearing session');
-        await supabase.auth.signOut();
-        return null;
-      }
-      
       return null;
     }
     
@@ -85,39 +76,26 @@ const getAuthToken = async () => {
     const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
     if (session.expires_at && (session.expires_at * 1000 - bufferTime) < Date.now()) {
       console.log('[getAuthToken] Token is expired or expiring soon, attempting refresh');
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
       
-      try {
-        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-        
-        if (refreshError) {
-          console.error('[getAuthToken] Failed to refresh token:', refreshError);
-          console.error('[getAuthToken] Refresh error details:', {
-            message: refreshError?.message,
-            status: refreshError?.status,
-            name: refreshError?.name
-          });
-          
-          // If refresh fails, sign out and return null
-          if (refreshError.message?.includes('Invalid Refresh Token') || refreshError.message?.includes('refresh_token_not_found')) {
-            console.log('[getAuthToken] Invalid refresh token during refresh, signing out');
-            await supabase.auth.signOut();
-          }
-          
-          return null;
-        }
-        
-        if (!refreshedSession || !refreshedSession.access_token) {
-          console.error('[getAuthToken] Refreshed session has no access token');
-          return null;
-        }
-        
-        console.log('[getAuthToken] Token refreshed successfully');
-        console.log('[getAuthToken] New token expires at:', refreshedSession.expires_at ? new Date(refreshedSession.expires_at * 1000).toISOString() : 'never');
-        return refreshedSession.access_token;
-      } catch (refreshException) {
-        console.error('[getAuthToken] Exception during token refresh:', refreshException);
+      if (refreshError || !refreshedSession) {
+        console.error('[getAuthToken] Failed to refresh token:', refreshError);
+        console.error('[getAuthToken] Refresh error details:', {
+          message: refreshError?.message,
+          status: refreshError?.status,
+          name: refreshError?.name
+        });
         return null;
       }
+      
+      if (!refreshedSession.access_token) {
+        console.error('[getAuthToken] Refreshed session has no access token');
+        return null;
+      }
+      
+      console.log('[getAuthToken] Token refreshed successfully');
+      console.log('[getAuthToken] New token expires at:', refreshedSession.expires_at ? new Date(refreshedSession.expires_at * 1000).toISOString() : 'never');
+      return refreshedSession.access_token;
     }
     
     console.log('[getAuthToken] Using existing valid token');
@@ -182,17 +160,7 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
           });
           
           try {
-            // Add timeout to prevent hanging requests
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-            
-            const response = await fetch(url, {
-              ...options,
-              signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            
+            const response = await fetch(url, options);
             console.log('[tRPC Fetch] Response status:', response.status);
             console.log('[tRPC Fetch] Response ok:', response.ok);
             console.log('[tRPC Fetch] Response headers:', Object.fromEntries(response.headers.entries()));
@@ -214,25 +182,7 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
               // Handle authentication errors specifically
               if (response.status === 401) {
                 console.error('[tRPC Fetch] Authentication error (401) - token may be invalid or expired');
-                throw new Error('UNAUTHORIZED: Authentication required. Please sign in again.');
-              }
-              
-              // Handle forbidden errors
-              if (response.status === 403) {
-                console.error('[tRPC Fetch] Forbidden error (403) - insufficient permissions');
-                throw new Error('FORBIDDEN: Insufficient permissions. Please check your account status.');
-              }
-              
-              // Handle 404 errors specifically
-              if (response.status === 404) {
-                console.error('[tRPC Fetch] API endpoint not found (404)');
-                throw new Error('API endpoint not found. The server may not be running or the endpoint may not exist.');
-              }
-              
-              // Handle 500 errors
-              if (response.status >= 500) {
-                console.error('[tRPC Fetch] Server error (5xx)');
-                throw new Error('Server error. Please try again later.');
+                throw new Error('Authentication required. Please sign in again.');
               }
               
               // If we get HTML instead of JSON, it's likely a 404 or server error
@@ -265,28 +215,15 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
             const contentType = response.headers.get('content-type');
             console.log('[tRPC Fetch] Response content-type:', contentType);
             
-            // Check if response body is empty
-            const responseText = await responseClone.text();
-            if (!responseText || responseText.trim() === '') {
-              console.error('[tRPC Fetch] Empty response body');
-              throw new Error('Server returned empty response.');
-            }
-            
-            // Check for HTML responses
-            if (responseText.includes('<html>') || responseText.includes('<!DOCTYPE')) {
-              console.error('[tRPC Fetch] Server returned HTML for successful response');
-              console.error('[tRPC Fetch] HTML response (first 500 chars):', responseText.substring(0, 500));
-              throw new Error('Server returned HTML instead of JSON. This usually means the API endpoint is not found or the server is not running properly.');
-            }
-            
-            // Try to parse as JSON to validate
-            try {
-              JSON.parse(responseText);
-              console.log('[tRPC Fetch] Response is valid JSON');
-            } catch (jsonError) {
-              console.error('[tRPC Fetch] Response is not valid JSON:', jsonError);
-              console.error('[tRPC Fetch] Response text (first 500 chars):', responseText.substring(0, 500));
-              throw new Error('Server returned invalid JSON. The response may be corrupted or the server may be misconfigured.');
+            if (contentType && !contentType.includes('application/json')) {
+              console.warn('[tRPC Fetch] Response is not JSON, content-type:', contentType);
+              const text = await responseClone.text();
+              console.warn('[tRPC Fetch] Non-JSON response body (first 500 chars):', text.substring(0, 500));
+              
+              if (text.includes('<html>') || text.includes('<!DOCTYPE')) {
+                console.error('[tRPC Fetch] Server returned HTML for successful response');
+                throw new Error(`Server returned HTML instead of JSON. This usually means the API endpoint is not found or the server is not running properly.`);
+              }
             }
             
             // Log successful response for debugging
@@ -303,12 +240,6 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
               cause: error?.cause,
               stack: error?.stack?.substring(0, 500)
             });
-            
-            // Handle timeout errors
-            if (error?.name === 'AbortError') {
-              console.error('[tRPC Fetch] Request timeout');
-              throw new Error('Request timeout. The server may be slow or unreachable.');
-            }
             
             // Provide more specific error messages
             if (error?.message?.includes('JSON Parse error') || error?.message?.includes('Unexpected character')) {
@@ -327,7 +258,7 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
             }
             
             // Re-throw the error with additional context
-            throw error;
+            throw new Error(`Network error: ${error?.message || 'Unknown error occurred'}`);
           }
         },
       }),

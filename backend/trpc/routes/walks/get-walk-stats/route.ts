@@ -88,21 +88,11 @@ export const getWalkStatsProcedure = protectedProcedure
       }
 
       // Calculate statistics
-      let totalWalks = walkSessions?.length || 0;
-      let totalDistance = walkSessions?.reduce((sum, walk) => sum + (Number(walk.distance_km) || 0), 0) || 0;
-      let totalDuration = walkSessions?.reduce((sum, walk) => sum + (Number(walk.duration_minutes) || 0), 0) || 0;
-      let totalSteps = walkSessions?.reduce((sum, walk) => sum + (Number(walk.steps) || 0), 0) || 0;
-      let totalCalories = walkSessions?.reduce((sum, walk) => sum + (Number(walk.calories_burned) || 0), 0) || 0;
-
-      // If no data exists, provide sample data for demonstration
-      if (totalWalks === 0) {
-        console.log('[getWalkStats] No walk sessions found, providing sample data');
-        totalWalks = 2;
-        totalDistance = 3.2;
-        totalDuration = 60;
-        totalSteps = 4000;
-        totalCalories = 200;
-      }
+      const totalWalks = walkSessions?.length || 0;
+      const totalDistance = walkSessions?.reduce((sum, walk) => sum + (Number(walk.distance_km) || 0), 0) || 0;
+      const totalDuration = walkSessions?.reduce((sum, walk) => sum + (Number(walk.duration_minutes) || 0), 0) || 0;
+      const totalSteps = walkSessions?.reduce((sum, walk) => sum + (Number(walk.steps) || 0), 0) || 0;
+      const totalCalories = walkSessions?.reduce((sum, walk) => sum + (Number(walk.calories_burned) || 0), 0) || 0;
 
       const avgDistance = totalWalks > 0 ? totalDistance / totalWalks : 0;
       const avgDuration = totalWalks > 0 ? totalDuration / totalWalks : 0;
@@ -117,7 +107,7 @@ export const getWalkStatsProcedure = protectedProcedure
       });
 
       // Calculate daily breakdown for charts
-      let dailyStats: Record<string, { walks: number; distance: number; duration: number; steps: number }> = {};
+      const dailyStats: Record<string, { walks: number; distance: number; duration: number; steps: number }> = {};
       
       walkSessions?.forEach(walk => {
         const walkDate = new Date(walk.start_time).toISOString().split('T')[0];
@@ -129,28 +119,6 @@ export const getWalkStatsProcedure = protectedProcedure
         dailyStats[walkDate].duration += Number(walk.duration_minutes) || 0;
         dailyStats[walkDate].steps += Number(walk.steps) || 0;
       });
-
-      // If no daily stats exist, provide sample data for the last few days
-      if (Object.keys(dailyStats).length === 0) {
-        console.log('[getWalkStats] No daily stats found, providing sample data');
-        const today = new Date();
-        for (let i = 0; i < 7; i++) {
-          const date = new Date(today);
-          date.setDate(today.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0];
-          
-          // Add some sample data for the last few days
-          if (i === 0) { // Today
-            dailyStats[dateStr] = { walks: 1, distance: 1.5, duration: 30, steps: 2000 };
-          } else if (i === 1) { // Yesterday
-            dailyStats[dateStr] = { walks: 1, distance: 1.7, duration: 30, steps: 2000 };
-          } else if (i === 3) { // 3 days ago
-            dailyStats[dateStr] = { walks: 0, distance: 0, duration: 0, steps: 0 };
-          } else {
-            dailyStats[dateStr] = { walks: 0, distance: 0, duration: 0, steps: 0 };
-          }
-        }
-      }
 
       console.log('[getWalkStats] Daily breakdown:', dailyStats);
 
@@ -182,9 +150,8 @@ export const getWalkStatsProcedure = protectedProcedure
         stack: error?.stack?.substring(0, 500)
       });
       
-      // Return fallback stats on error to prevent "Error" display
-      console.error('[getWalkStats] Returning fallback stats due to error');
-      return {
+      // Return default stats on error to prevent crashes
+      const fallbackStats = {
         period: input.period,
         startDate: new Date().toISOString(),
         endDate: new Date().toISOString(),
@@ -198,5 +165,8 @@ export const getWalkStatsProcedure = protectedProcedure
         avgSpeed: 0,
         dailyBreakdown: {}
       };
+      
+      console.log('[getWalkStats] Returning fallback stats due to error:', fallbackStats);
+      return fallbackStats;
     }
   });

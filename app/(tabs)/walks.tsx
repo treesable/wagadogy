@@ -175,223 +175,44 @@ export default function WalksScreen() {
     walks: number;
   } | null>(null);
   const [showCreateWalkModal, setShowCreateWalkModal] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [diagnosticResults, setDiagnosticResults] = useState<any>(null);
-
-  // Diagnostic function to test API connectivity
-  const runDiagnostics = async () => {
-    console.log('[WalksScreen] Running API diagnostics...');
-    setDiagnosticResults(null);
-    
-    const results: any = {
-      timestamp: new Date().toISOString(),
-      tests: []
-    };
-    
-    try {
-      const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-      console.log('[Diagnostics] Base URL:', baseUrl);
-      
-      if (!baseUrl) {
-        results.tests.push({
-          name: 'Environment Variables',
-          status: 'FAIL',
-          error: 'EXPO_PUBLIC_RORK_API_BASE_URL is not set'
-        });
-        setDiagnosticResults(results);
-        return;
-      }
-      
-      results.tests.push({
-        name: 'Environment Variables',
-        status: 'PASS',
-        data: { baseUrl }
-      });
-      
-      // Test 1: Basic API connectivity
-      try {
-        console.log('[Diagnostics] Testing basic API connectivity...');
-        const response = await fetch(`${baseUrl}/api/health`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        console.log('[Diagnostics] Health check response status:', response.status);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[Diagnostics] Health check data:', data);
-          results.tests.push({
-            name: 'API Health Check',
-            status: 'PASS',
-            data
-          });
-        } else {
-          const errorText = await response.text();
-          console.error('[Diagnostics] Health check failed:', errorText);
-          results.tests.push({
-            name: 'API Health Check',
-            status: 'FAIL',
-            error: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
-          });
-        }
-      } catch (error: any) {
-        console.error('[Diagnostics] Health check exception:', error);
-        results.tests.push({
-          name: 'API Health Check',
-          status: 'FAIL',
-          error: error.message
-        });
-      }
-      
-      // Test 2: tRPC endpoint
-      try {
-        console.log('[Diagnostics] Testing tRPC endpoint...');
-        const response = await fetch(`${baseUrl}/api/trpc/example.hi`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        console.log('[Diagnostics] tRPC test response status:', response.status);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[Diagnostics] tRPC test data:', data);
-          results.tests.push({
-            name: 'tRPC Endpoint Test',
-            status: 'PASS',
-            data
-          });
-        } else {
-          const errorText = await response.text();
-          console.error('[Diagnostics] tRPC test failed:', errorText);
-          results.tests.push({
-            name: 'tRPC Endpoint Test',
-            status: 'FAIL',
-            error: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
-          });
-        }
-      } catch (error: any) {
-        console.error('[Diagnostics] tRPC test exception:', error);
-        results.tests.push({
-          name: 'tRPC Endpoint Test',
-          status: 'FAIL',
-          error: error.message
-        });
-      }
-      
-      // Test 3: Authentication
-      try {
-        console.log('[Diagnostics] Testing authentication...');
-        const token = session?.access_token;
-        
-        if (!token) {
-          results.tests.push({
-            name: 'Authentication Test',
-            status: 'FAIL',
-            error: 'No access token available'
-          });
-        } else {
-          const response = await fetch(`${baseUrl}/api/trpc/walks.getUserStats`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          
-          console.log('[Diagnostics] Auth test response status:', response.status);
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log('[Diagnostics] Auth test data:', data);
-            results.tests.push({
-              name: 'Authentication Test',
-              status: 'PASS',
-              data: { hasData: !!data }
-            });
-          } else {
-            const errorText = await response.text();
-            console.error('[Diagnostics] Auth test failed:', errorText);
-            results.tests.push({
-              name: 'Authentication Test',
-              status: 'FAIL',
-              error: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
-            });
-          }
-        }
-      } catch (error: any) {
-        console.error('[Diagnostics] Auth test exception:', error);
-        results.tests.push({
-          name: 'Authentication Test',
-          status: 'FAIL',
-          error: error.message
-        });
-      }
-      
-    } catch (error: any) {
-      console.error('[Diagnostics] General exception:', error);
-      results.tests.push({
-        name: 'General Error',
-        status: 'FAIL',
-        error: error.message
-      });
-    }
-    
-    console.log('[Diagnostics] Final results:', results);
-    setDiagnosticResults(results);
-  };
 
   // Fetch user statistics from database
   const { data: userStats, isLoading: statsLoading, error: statsError, refetch: refetchUserStats } = trpc.walks.getUserStats.useQuery(undefined, {
-    enabled: !!user && !!session && !!session.access_token && (!session.expires_at || (session.expires_at * 1000) > Date.now()), // Only run query when user is authenticated with valid, non-expired token
+    enabled: !!user && !!session && !!session.access_token, // Only run query when user is authenticated with valid token
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0, // Always refetch to get latest data
-    gcTime: 0, // Don't cache data
-
     retry: (failureCount: number, error: any) => {
       console.log(`[WalksScreen] getUserStats retry attempt ${failureCount}`, error?.message);
       // Don't retry on authentication errors
-      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required') || error?.message?.includes('Invalid JWT')) {
+      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required')) {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      // Don't retry on JSON parse errors or server configuration issues
-      if (error?.message?.includes('JSON Parse error') || error?.message?.includes('Server returned HTML') || error?.message?.includes('API endpoint not found')) {
-        console.log('[WalksScreen] Server configuration error, not retrying');
-        return false;
-      }
-      return failureCount < 2; // Reduce retry attempts to avoid excessive requests
+      return failureCount < 2; // Reduce retry attempts
     },
-    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 3000)
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 10000)
   });
   
   const { data: walkStats, isLoading: walkStatsLoading, error: walkStatsError, refetch: refetchWalkStats } = trpc.walks.getStats.useQuery({
     period: selectedPeriod
   }, {
-    enabled: !!user && !!session && !!session.access_token && (!session.expires_at || (session.expires_at * 1000) > Date.now()), // Only run query when user is authenticated with valid, non-expired token
+    enabled: !!user && !!session && !!session.access_token, // Only run query when user is authenticated with valid token
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0,
-    gcTime: 0, // Don't cache data
-
     retry: (failureCount, error: any) => {
       console.log(`[WalksScreen] getStats retry attempt ${failureCount}`, error?.message);
       // Don't retry on authentication errors
-      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required') || error?.message?.includes('Invalid JWT')) {
+      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required')) {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 3; // Allow more retry attempts
+      return failureCount < 2; // Reduce retry attempts
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000)
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000)
   });
   
   // Fetch scheduled walks from database
@@ -400,22 +221,20 @@ export default function WalksScreen() {
     upcoming_only: true,
     limit: 20
   }, {
-    enabled: !!user && !!session && !!session.access_token && (!session.expires_at || (session.expires_at * 1000) > Date.now()),
+    enabled: !!user && !!session && !!session.access_token,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0,
-    gcTime: 0, // Don't cache data
-
     retry: (failureCount, error: any) => {
       console.log(`[WalksScreen] getSchedules retry attempt ${failureCount}`, error?.message);
-      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required') || error?.message?.includes('Invalid JWT')) {
+      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required')) {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
       return failureCount < 2;
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000)
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000)
   });
 
   // Transform database scheduled walks to local format
@@ -446,15 +265,6 @@ export default function WalksScreen() {
       console.log('[WalksScreen] Screen focused, refetching data...');
       if (user && session && session.access_token) {
         console.log('[WalksScreen] User authenticated with valid token, refetching data');
-        console.log('[WalksScreen] Session expires at:', session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'never');
-        console.log('[WalksScreen] Session is expired:', session.expires_at ? (session.expires_at * 1000) < Date.now() : false);
-        
-        // Check if session is expired before refetching
-        if (session.expires_at && (session.expires_at * 1000) < Date.now()) {
-          console.log('[WalksScreen] Session expired, not refetching data');
-          return;
-        }
-        
         // Add small delay to ensure auth state is stable
         setTimeout(() => {
           refetchUserStats();
@@ -485,23 +295,14 @@ export default function WalksScreen() {
       console.log('[WalksScreen] User exists:', !!user);
       console.log('[WalksScreen] Session exists:', !!session);
       console.log('[WalksScreen] Session access token exists:', !!session?.access_token);
-      console.log('[WalksScreen] Session expires at:', session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'never');
-      console.log('[WalksScreen] Session is expired:', session?.expires_at ? (session.expires_at * 1000) < Date.now() : false);
       
       if (user && session && session.access_token) {
-        // Check if session is expired
-        if (session.expires_at && (session.expires_at * 1000) < Date.now()) {
-          console.log('[WalksScreen] Session expired, not refetching data');
-          return;
-        }
-        
         console.log('[WalksScreen] User authenticated with valid session, refetching data');
         // Add small delay to ensure auth state is stable
         setTimeout(() => {
-          console.log('[WalksScreen] Executing refetch operations...');
-          refetchUserStats().catch(err => console.error('[WalksScreen] Error refetching user stats:', err));
-          refetchWalkStats().catch(err => console.error('[WalksScreen] Error refetching walk stats:', err));
-          refetchScheduledWalks().catch(err => console.error('[WalksScreen] Error refetching scheduled walks:', err));
+          refetchUserStats();
+          refetchWalkStats();
+          refetchScheduledWalks();
         }, 200);
       } else {
         console.log('[WalksScreen] User not authenticated or session invalid, skipping refetch');
@@ -543,15 +344,6 @@ export default function WalksScreen() {
     console.log('[WalksScreen] Component mounted, queries should start automatically');
     console.log('[WalksScreen] User authenticated:', !!user && !!session && !!session?.access_token);
     console.log('[WalksScreen] Stats loading:', statsLoading, 'Walk stats loading:', walkStatsLoading);
-    
-    // If we have authentication issues, try to clear and re-authenticate
-    if (user && session && !session.access_token) {
-      console.log('[WalksScreen] Session exists but no access token - clearing session');
-      // This will trigger a re-authentication
-      setTimeout(() => {
-        router.push('/login');
-      }, 1000);
-    }
   }, [statsLoading, walkStatsLoading, user, session]);
 
   // Log loading state changes
@@ -566,30 +358,16 @@ export default function WalksScreen() {
     console.log('[WalksScreen] Session details:', {
       hasAccessToken: !!session?.access_token,
       expiresAt: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
-      isExpired: session?.expires_at ? (session.expires_at * 1000) < Date.now() : null,
-      tokenLength: session?.access_token?.length || 0
+      isExpired: session?.expires_at ? (session.expires_at * 1000) < Date.now() : null
     });
     
     if (user && session && session.access_token) {
-      // Check if session is expired
-      if (session.expires_at && (session.expires_at * 1000) < Date.now()) {
-        console.log('[WalksScreen] Session expired, not triggering refetch');
-        return;
-      }
-      
-      // Check if token is about to expire (within 5 minutes)
-      if (session.expires_at && (session.expires_at * 1000 - 5 * 60 * 1000) < Date.now()) {
-        console.log('[WalksScreen] Session expiring soon, will skip refetch');
-        return;
-      }
-      
       console.log('[WalksScreen] User authenticated with valid session, queries should be enabled');
       // Trigger a fresh fetch when auth state becomes valid
       setTimeout(() => {
-        console.log('[WalksScreen] Triggering auth state change refetch...');
-        refetchUserStats().catch(err => console.error('[WalksScreen] Auth change - Error refetching user stats:', err));
-        refetchWalkStats().catch(err => console.error('[WalksScreen] Auth change - Error refetching walk stats:', err));
-        refetchScheduledWalks().catch(err => console.error('[WalksScreen] Auth change - Error refetching scheduled walks:', err));
+        refetchUserStats();
+        refetchWalkStats();
+        refetchScheduledWalks();
       }, 300);
     } else {
       console.log('[WalksScreen] User not authenticated or session invalid, queries should be disabled');
@@ -870,10 +648,7 @@ export default function WalksScreen() {
                 >
                   <Clock color="#fff" size={24} />
                   <Text style={styles.statValue}>
-                    {!user || !session || !session?.access_token ? 'Sign In' : 
-                     session.expires_at && (session.expires_at * 1000) < Date.now() ? 'Expired' :
-                     statsLoading ? '...' : 
-                     (userStats?.total_duration_minutes ?? 0)}
+                    {!user || !session || !session?.access_token ? 'Sign In' : statsLoading ? '...' : statsError ? 'Error' : (userStats?.total_duration_minutes ?? 0)}
                   </Text>
                   <Text style={styles.statLabel}>Minutes Total</Text>
                   {statsError && (
@@ -896,10 +671,7 @@ export default function WalksScreen() {
                 >
                   <MapPin color="#fff" size={24} />
                   <Text style={styles.statValue}>
-                    {!user || !session || !session?.access_token ? 'Sign In' : 
-                     session.expires_at && (session.expires_at * 1000) < Date.now() ? 'Expired' :
-                     statsLoading ? '...' : 
-                     (userStats?.total_distance_km?.toFixed(1) ?? '0.0')}
+                    {!user || !session || !session?.access_token ? 'Sign In' : statsLoading ? '...' : statsError ? 'Error' : (userStats?.total_distance_km?.toFixed(1) ?? '0.0')}
                   </Text>
                   <Text style={styles.statLabel}>Total km</Text>
                   {statsError && (

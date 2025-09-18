@@ -5,7 +5,6 @@ export const getUserStatsProcedure = protectedProcedure
     console.log('[getUserStats] Starting - user ID:', ctx.user.id);
     console.log('[getUserStats] User email:', ctx.user.email);
     console.log('[getUserStats] User confirmed:', !!ctx.user.email_confirmed_at);
-    console.log('[getUserStats] Supabase client exists:', !!ctx.supabase);
 
     try {
       // Test database connection first
@@ -51,17 +50,16 @@ export const getUserStatsProcedure = protectedProcedure
       if (!userStats || statsError?.code === 'PGRST116') {
         console.log('[getUserStats] No user statistics found, creating default entry');
         
-        // Create default stats with some sample data for demonstration
         const defaultStats = {
           user_id: ctx.user.id,
-          total_walks: 3,
-          total_distance_km: 4.5,
-          total_duration_minutes: 90,
-          total_steps: 6000,
-          total_calories_burned: 300,
-          current_streak_days: 2,
-          longest_streak_days: 5,
-          last_walk_date: new Date().toISOString().split('T')[0],
+          total_walks: 0,
+          total_distance_km: 0,
+          total_duration_minutes: 0,
+          total_steps: 0,
+          total_calories_burned: 0,
+          current_streak_days: 0,
+          longest_streak_days: 0,
+          last_walk_date: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -75,12 +73,6 @@ export const getUserStatsProcedure = protectedProcedure
         
         if (createError) {
           console.error('[getUserStats] Failed to create default stats:', createError);
-          console.error('[getUserStats] Create error details:', {
-            code: createError.code,
-            message: createError.message,
-            details: createError.details,
-            hint: createError.hint
-          });
           // Return defaults without database entry
           console.log('[getUserStats] Returning in-memory defaults');
           return {
@@ -141,8 +133,7 @@ export const getUserStatsProcedure = protectedProcedure
         stack: error?.stack?.substring(0, 500)
       });
       
-      // Return fallback stats on error to prevent "Error" display
-      console.error('[getUserStats] Returning fallback stats due to error');
+      // Return default stats on error to prevent crashes
       const fallbackStats = {
         total_walks: 0,
         total_distance_km: 0,
@@ -156,7 +147,7 @@ export const getUserStatsProcedure = protectedProcedure
         updated_at: null
       };
       
-      console.log('[getUserStats] Fallback stats being returned:', fallbackStats);
+      console.log('[getUserStats] Returning fallback stats due to error:', fallbackStats);
       return fallbackStats;
     }
   });
