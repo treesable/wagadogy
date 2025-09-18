@@ -8,15 +8,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-  console.log('[getBaseUrl] Environment variable EXPO_PUBLIC_RORK_API_BASE_URL:', baseUrl);
-  
-  if (baseUrl) {
-    console.log('[getBaseUrl] Using base URL:', baseUrl);
-    return baseUrl;
+  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
 
-  console.error('[getBaseUrl] No base URL found in environment variables');
   throw new Error(
     "No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL"
   );
@@ -273,36 +268,3 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
 
 // Default client for backward compatibility
 export const trpcClient = createTRPCClient();
-
-// Test connectivity to the API
-export const testApiConnectivity = async () => {
-  try {
-    const baseUrl = getBaseUrl();
-    const healthUrl = `${baseUrl}/api/health`;
-    
-    console.log('[testApiConnectivity] Testing connectivity to:', healthUrl);
-    
-    const response = await fetch(healthUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    console.log('[testApiConnectivity] Response status:', response.status);
-    console.log('[testApiConnectivity] Response ok:', response.ok);
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('[testApiConnectivity] Health check successful:', data);
-      return { success: true, data };
-    } else {
-      const errorText = await response.text();
-      console.error('[testApiConnectivity] Health check failed:', errorText);
-      return { success: false, error: `HTTP ${response.status}: ${errorText}` };
-    }
-  } catch (error: any) {
-    console.error('[testApiConnectivity] Network error:', error);
-    return { success: false, error: error?.message || 'Network error' };
-  }
-};

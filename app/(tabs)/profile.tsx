@@ -26,7 +26,6 @@ import MultiSelect from "@/components/MultiSelect";
 import PhotoGallery from "@/components/PhotoGallery";
 import DogProfileSelector from "@/components/DogProfileSelector";
 import { uploadImageToSupabaseAuth } from '@/utils/imageUtils';
-import ApiTest from '@/components/ApiTest';
 
 type EditMode = 'none' | 'dog' | 'user' | 'preferences' | 'settings' | 'health' | 'behavior' | 'photos' | 'dogs';
 
@@ -130,7 +129,6 @@ export default function ProfileScreen() {
   const [activeDogId, setActiveDogId] = useState<string | undefined>(userProfile.activeDogId);
   const [dogProfiles, setDogProfiles] = useState<DogProfileData[]>(userProfile.dogProfiles || []);
   const [showPreview, setShowPreview] = useState(false);
-  const [showApiTest, setShowApiTest] = useState(false);
   
   // Get the active dog for display
   const activeDog = dogProfiles.length > 0 ? (dogProfiles.find(dog => dog.id === activeDogId) || dogProfiles.find(dog => dog.isPrimary) || dogProfiles[0]) : undefined;
@@ -1569,30 +1567,6 @@ export default function ProfileScreen() {
         {renderHealthSection()}
         {renderUserSection()}
         {renderSettingsSection()}
-        
-        <View style={styles.infoSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>API Test</Text>
-            <TouchableOpacity 
-              style={styles.editSectionButton} 
-              onPress={() => setShowApiTest(!showApiTest)}
-            >
-              <Settings color="#FF6B6B" size={18} />
-            </TouchableOpacity>
-          </View>
-          
-          {showApiTest ? (
-            <ApiTest />
-          ) : (
-            <TouchableOpacity 
-              style={styles.preferenceItem}
-              onPress={() => setShowApiTest(true)}
-            >
-              <Text style={styles.preferenceLabel}>Test backend connectivity</Text>
-              <Text style={styles.preferenceValue}>Tap to test</Text>
-            </TouchableOpacity>
-          )}
-        </View>
 
         {editMode !== 'none' && (
           <View style={styles.actionButtons}>
