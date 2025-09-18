@@ -192,9 +192,9 @@ export default function WalksScreen() {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 2; // Reduce retry attempts
+      return failureCount < 3; // Allow more retry attempts
     },
-    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 3000)
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 5000)
   });
   
   const { data: walkStats, isLoading: walkStatsLoading, error: walkStatsError, refetch: refetchWalkStats } = trpc.walks.getStats.useQuery({
@@ -214,9 +214,9 @@ export default function WalksScreen() {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 2; // Reduce retry attempts
+      return failureCount < 3; // Allow more retry attempts
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000)
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000)
   });
   
   // Fetch scheduled walks from database
