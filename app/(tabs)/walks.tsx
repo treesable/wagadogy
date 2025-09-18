@@ -175,6 +175,176 @@ export default function WalksScreen() {
     walks: number;
   } | null>(null);
   const [showCreateWalkModal, setShowCreateWalkModal] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagnosticResults, setDiagnosticResults] = useState<any>(null);
+
+  // Diagnostic function to test API connectivity
+  const runDiagnostics = async () => {
+    console.log('[WalksScreen] Running API diagnostics...');
+    setDiagnosticResults(null);
+    
+    const results: any = {
+      timestamp: new Date().toISOString(),
+      tests: []
+    };
+    
+    try {
+      const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+      console.log('[Diagnostics] Base URL:', baseUrl);
+      
+      if (!baseUrl) {
+        results.tests.push({
+          name: 'Environment Variables',
+          status: 'FAIL',
+          error: 'EXPO_PUBLIC_RORK_API_BASE_URL is not set'
+        });
+        setDiagnosticResults(results);
+        return;
+      }
+      
+      results.tests.push({
+        name: 'Environment Variables',
+        status: 'PASS',
+        data: { baseUrl }
+      });
+      
+      // Test 1: Basic API connectivity
+      try {
+        console.log('[Diagnostics] Testing basic API connectivity...');
+        const response = await fetch(`${baseUrl}/api/health`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('[Diagnostics] Health check response status:', response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Diagnostics] Health check data:', data);
+          results.tests.push({
+            name: 'API Health Check',
+            status: 'PASS',
+            data
+          });
+        } else {
+          const errorText = await response.text();
+          console.error('[Diagnostics] Health check failed:', errorText);
+          results.tests.push({
+            name: 'API Health Check',
+            status: 'FAIL',
+            error: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
+          });
+        }
+      } catch (error: any) {
+        console.error('[Diagnostics] Health check exception:', error);
+        results.tests.push({
+          name: 'API Health Check',
+          status: 'FAIL',
+          error: error.message
+        });
+      }
+      
+      // Test 2: tRPC endpoint
+      try {
+        console.log('[Diagnostics] Testing tRPC endpoint...');
+        const response = await fetch(`${baseUrl}/api/trpc/example.hi`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('[Diagnostics] tRPC test response status:', response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Diagnostics] tRPC test data:', data);
+          results.tests.push({
+            name: 'tRPC Endpoint Test',
+            status: 'PASS',
+            data
+          });
+        } else {
+          const errorText = await response.text();
+          console.error('[Diagnostics] tRPC test failed:', errorText);
+          results.tests.push({
+            name: 'tRPC Endpoint Test',
+            status: 'FAIL',
+            error: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
+          });
+        }
+      } catch (error: any) {
+        console.error('[Diagnostics] tRPC test exception:', error);
+        results.tests.push({
+          name: 'tRPC Endpoint Test',
+          status: 'FAIL',
+          error: error.message
+        });
+      }
+      
+      // Test 3: Authentication
+      try {
+        console.log('[Diagnostics] Testing authentication...');
+        const token = session?.access_token;
+        
+        if (!token) {
+          results.tests.push({
+            name: 'Authentication Test',
+            status: 'FAIL',
+            error: 'No access token available'
+          });
+        } else {
+          const response = await fetch(`${baseUrl}/api/trpc/walks.getUserStats`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          console.log('[Diagnostics] Auth test response status:', response.status);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('[Diagnostics] Auth test data:', data);
+            results.tests.push({
+              name: 'Authentication Test',
+              status: 'PASS',
+              data: { hasData: !!data }
+            });
+          } else {
+            const errorText = await response.text();
+            console.error('[Diagnostics] Auth test failed:', errorText);
+            results.tests.push({
+              name: 'Authentication Test',
+              status: 'FAIL',
+              error: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
+            });
+          }
+        }
+      } catch (error: any) {
+        console.error('[Diagnostics] Auth test exception:', error);
+        results.tests.push({
+          name: 'Authentication Test',
+          status: 'FAIL',
+          error: error.message
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('[Diagnostics] General exception:', error);
+      results.tests.push({
+        name: 'General Error',
+        status: 'FAIL',
+        error: error.message
+      });
+    }
+    
+    console.log('[Diagnostics] Final results:', results);
+    setDiagnosticResults(results);
+  };
 
   // Fetch user statistics from database
   const { data: userStats, isLoading: statsLoading, error: statsError, refetch: refetchUserStats } = trpc.walks.getUserStats.useQuery(undefined, {
@@ -190,6 +360,11 @@ export default function WalksScreen() {
       // Don't retry on authentication errors
       if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required') || error?.message?.includes('Invalid JWT')) {
         console.log('[WalksScreen] Authentication error, not retrying');
+        return false;
+      }
+      // Don't retry on JSON parse errors or server configuration issues
+      if (error?.message?.includes('JSON Parse error') || error?.message?.includes('Server returned HTML') || error?.message?.includes('API endpoint not found')) {
+        console.log('[WalksScreen] Server configuration error, not retrying');
         return false;
       }
       return failureCount < 2; // Reduce retry attempts to avoid excessive requests

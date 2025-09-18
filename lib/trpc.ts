@@ -182,7 +182,17 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
           });
           
           try {
-            const response = await fetch(url, options);
+            // Add timeout to prevent hanging requests
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            
+            const response = await fetch(url, {
+              ...options,
+              signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
             console.log('[tRPC Fetch] Response status:', response.status);
             console.log('[tRPC Fetch] Response ok:', response.ok);
             console.log('[tRPC Fetch] Response headers:', Object.fromEntries(response.headers.entries()));
@@ -211,6 +221,18 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
               if (response.status === 403) {
                 console.error('[tRPC Fetch] Forbidden error (403) - insufficient permissions');
                 throw new Error('FORBIDDEN: Insufficient permissions. Please check your account status.');
+              }
+              
+              // Handle 404 errors specifically
+              if (response.status === 404) {
+                console.error('[tRPC Fetch] API endpoint not found (404)');
+                throw new Error('API endpoint not found. The server may not be running or the endpoint may not exist.');
+              }
+              
+              // Handle 500 errors
+              if (response.status >= 500) {
+                console.error('[tRPC Fetch] Server error (5xx)');
+                throw new Error('Server error. Please try again later.');
               }
               
               // If we get HTML instead of JSON, it's likely a 404 or server error
@@ -243,15 +265,28 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
             const contentType = response.headers.get('content-type');
             console.log('[tRPC Fetch] Response content-type:', contentType);
             
-            if (contentType && !contentType.includes('application/json')) {
-              console.warn('[tRPC Fetch] Response is not JSON, content-type:', contentType);
-              const text = await responseClone.text();
-              console.warn('[tRPC Fetch] Non-JSON response body (first 500 chars):', text.substring(0, 500));
-              
-              if (text.includes('<html>') || text.includes('<!DOCTYPE')) {
-                console.error('[tRPC Fetch] Server returned HTML for successful response');
-                throw new Error(`Server returned HTML instead of JSON. This usually means the API endpoint is not found or the server is not running properly.`);
-              }
+            // Check if response body is empty
+            const responseText = await responseClone.text();
+            if (!responseText || responseText.trim() === '') {
+              console.error('[tRPC Fetch] Empty response body');
+              throw new Error('Server returned empty response.');
+            }
+            
+            // Check for HTML responses
+            if (responseText.includes('<html>') || responseText.includes('<!DOCTYPE')) {
+              console.error('[tRPC Fetch] Server returned HTML for successful response');
+              console.error('[tRPC Fetch] HTML response (first 500 chars):', responseText.substring(0, 500));
+              throw new Error('Server returned HTML instead of JSON. This usually means the API endpoint is not found or the server is not running properly.');
+            }
+            
+            // Try to parse as JSON to validate
+            try {
+              JSON.parse(responseText);
+              console.log('[tRPC Fetch] Response is valid JSON');
+            } catch (jsonError) {
+              console.error('[tRPC Fetch] Response is not valid JSON:', jsonError);
+              console.error('[tRPC Fetch] Response text (first 500 chars):', responseText.substring(0, 500));
+              throw new Error('Server returned invalid JSON. The response may be corrupted or the server may be misconfigured.');
             }
             
             // Log successful response for debugging
@@ -268,6 +303,12 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
               cause: error?.cause,
               stack: error?.stack?.substring(0, 500)
             });
+            
+            // Handle timeout errors
+            if (error?.name === 'AbortError') {
+              console.error('[tRPC Fetch] Request timeout');
+              throw new Error('Request timeout. The server may be slow or unreachable.');
+            }
             
             // Provide more specific error messages
             if (error?.message?.includes('JSON Parse error') || error?.message?.includes('Unexpected character')) {
@@ -286,7 +327,7 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
             }
             
             // Re-throw the error with additional context
-            throw new Error(`Network error: ${error?.message || 'Unknown error occurred'}`);
+            throw error;
           }
         },
       }),

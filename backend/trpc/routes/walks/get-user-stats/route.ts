@@ -143,7 +143,7 @@ export const getUserStatsProcedure = protectedProcedure
       
       // Return fallback stats on error to prevent "Error" display
       console.error('[getUserStats] Returning fallback stats due to error');
-      return {
+      const fallbackStats = {
         total_walks: 0,
         total_distance_km: 0,
         total_duration_minutes: 0,
@@ -155,5 +155,8 @@ export const getUserStatsProcedure = protectedProcedure
         created_at: null,
         updated_at: null
       };
+      
+      console.log('[getUserStats] Fallback stats being returned:', fallbackStats);
+      return fallbackStats;
     }
   });

@@ -33,9 +33,30 @@ app.get("/health", (c) => {
     timestamp: new Date().toISOString(),
     endpoints: {
       trpc: "/api/trpc",
-      health: "/api/health"
+      health: "/api/health",
+      test: "/api/test"
+    },
+    environment: {
+      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ? 'configured' : 'missing',
+      supabaseKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ? 'configured' : 'missing'
     }
   });
+});
+
+// Simple test endpoint to verify API is working
+app.get("/test", (c) => {
+  return c.json({ 
+    message: "API test successful", 
+    timestamp: new Date().toISOString(),
+    method: c.req.method,
+    url: c.req.url,
+    headers: Object.fromEntries(c.req.raw.headers.entries())
+  });
+});
+
+// Test endpoint with CORS headers
+app.options("/test", (c) => {
+  return c.json({ message: "CORS preflight successful" });
 });
 
 export default app;
