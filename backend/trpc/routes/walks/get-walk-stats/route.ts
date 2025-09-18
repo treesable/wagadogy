@@ -150,23 +150,9 @@ export const getWalkStatsProcedure = protectedProcedure
         stack: error?.stack?.substring(0, 500)
       });
       
-      // Return default stats on error to prevent crashes
-      const fallbackStats = {
-        period: input.period,
-        startDate: new Date().toISOString(),
-        endDate: new Date().toISOString(),
-        totalWalks: 0,
-        totalDistance: 0,
-        totalDuration: 0,
-        totalSteps: 0,
-        totalCalories: 0,
-        avgDistance: 0,
-        avgDuration: 0,
-        avgSpeed: 0,
-        dailyBreakdown: {}
-      };
-      
-      console.log('[getWalkStats] Returning fallback stats due to error:', fallbackStats);
-      return fallbackStats;
+      // Don't return fallback stats on error - let the error propagate to the client
+      // This way the client can show proper error messages and retry functionality
+      console.error('[getWalkStats] Throwing error to client for proper error handling');
+      throw new Error(`Failed to fetch walk statistics: ${error?.message || 'Unknown database error'}`);
     }
   });

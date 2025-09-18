@@ -73,6 +73,12 @@ export const getUserStatsProcedure = protectedProcedure
         
         if (createError) {
           console.error('[getUserStats] Failed to create default stats:', createError);
+          console.error('[getUserStats] Create error details:', {
+            code: createError.code,
+            message: createError.message,
+            details: createError.details,
+            hint: createError.hint
+          });
           // Return defaults without database entry
           console.log('[getUserStats] Returning in-memory defaults');
           return {
@@ -133,21 +139,9 @@ export const getUserStatsProcedure = protectedProcedure
         stack: error?.stack?.substring(0, 500)
       });
       
-      // Return default stats on error to prevent crashes
-      const fallbackStats = {
-        total_walks: 0,
-        total_distance_km: 0,
-        total_duration_minutes: 0,
-        total_steps: 0,
-        total_calories_burned: 0,
-        current_streak_days: 0,
-        longest_streak_days: 0,
-        last_walk_date: null,
-        created_at: null,
-        updated_at: null
-      };
-      
-      console.log('[getUserStats] Returning fallback stats due to error:', fallbackStats);
-      return fallbackStats;
+      // Don't return fallback stats on error - let the error propagate to the client
+      // This way the client can show proper error messages and retry functionality
+      console.error('[getUserStats] Throwing error to client for proper error handling');
+      throw new Error(`Failed to fetch user statistics: ${error?.message || 'Unknown database error'}`);
     }
   });

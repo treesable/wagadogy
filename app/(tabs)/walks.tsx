@@ -178,43 +178,45 @@ export default function WalksScreen() {
 
   // Fetch user statistics from database
   const { data: userStats, isLoading: statsLoading, error: statsError, refetch: refetchUserStats } = trpc.walks.getUserStats.useQuery(undefined, {
-    enabled: !!user && !!session && !!session.access_token, // Only run query when user is authenticated with valid token
+    enabled: !!user && !!session && !!session.access_token && (!session.expires_at || (session.expires_at * 1000) > Date.now()), // Only run query when user is authenticated with valid, non-expired token
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0, // Always refetch to get latest data
+    gcTime: 0, // Don't cache data
 
     retry: (failureCount: number, error: any) => {
       console.log(`[WalksScreen] getUserStats retry attempt ${failureCount}`, error?.message);
       // Don't retry on authentication errors
-      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required')) {
+      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required') || error?.message?.includes('Invalid JWT')) {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 3; // Allow more retry attempts
+      return failureCount < 2; // Reduce retry attempts
     },
-    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 5000)
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 3000)
   });
   
   const { data: walkStats, isLoading: walkStatsLoading, error: walkStatsError, refetch: refetchWalkStats } = trpc.walks.getStats.useQuery({
     period: selectedPeriod
   }, {
-    enabled: !!user && !!session && !!session.access_token, // Only run query when user is authenticated with valid token
+    enabled: !!user && !!session && !!session.access_token && (!session.expires_at || (session.expires_at * 1000) > Date.now()), // Only run query when user is authenticated with valid, non-expired token
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0,
+    gcTime: 0, // Don't cache data
 
     retry: (failureCount, error: any) => {
       console.log(`[WalksScreen] getStats retry attempt ${failureCount}`, error?.message);
       // Don't retry on authentication errors
-      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required')) {
+      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required') || error?.message?.includes('Invalid JWT')) {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 3; // Allow more retry attempts
+      return failureCount < 2; // Reduce retry attempts
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000)
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000)
   });
   
   // Fetch scheduled walks from database
@@ -223,21 +225,22 @@ export default function WalksScreen() {
     upcoming_only: true,
     limit: 20
   }, {
-    enabled: !!user && !!session && !!session.access_token,
+    enabled: !!user && !!session && !!session.access_token && (!session.expires_at || (session.expires_at * 1000) > Date.now()),
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0,
+    gcTime: 0, // Don't cache data
 
     retry: (failureCount, error: any) => {
       console.log(`[WalksScreen] getSchedules retry attempt ${failureCount}`, error?.message);
-      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required')) {
+      if (error?.message?.includes('UNAUTHORIZED') || error?.message?.includes('Authentication required') || error?.message?.includes('Invalid JWT')) {
         console.log('[WalksScreen] Authentication error, not retrying');
         return false;
       }
-      return failureCount < 3;
+      return failureCount < 2;
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000)
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000)
   });
 
   // Transform database scheduled walks to local format
@@ -387,6 +390,12 @@ export default function WalksScreen() {
       // Check if session is expired
       if (session.expires_at && (session.expires_at * 1000) < Date.now()) {
         console.log('[WalksScreen] Session expired, not triggering refetch');
+        return;
+      }
+      
+      // Check if token is about to expire (within 5 minutes)
+      if (session.expires_at && (session.expires_at * 1000 - 5 * 60 * 1000) < Date.now()) {
+        console.log('[WalksScreen] Session expiring soon, will skip refetch');
         return;
       }
       
@@ -677,7 +686,11 @@ export default function WalksScreen() {
                 >
                   <Clock color="#fff" size={24} />
                   <Text style={styles.statValue}>
-                    {!user || !session || !session?.access_token ? 'Sign In' : statsLoading ? '...' : statsError ? 'Error' : (userStats?.total_duration_minutes ?? 0)}
+                    {!user || !session || !session?.access_token ? 'Sign In' : 
+                     session.expires_at && (session.expires_at * 1000) < Date.now() ? 'Expired' :
+                     statsLoading ? '...' : 
+                     statsError ? 'Error' : 
+                     (userStats?.total_duration_minutes ?? 0)}
                   </Text>
                   <Text style={styles.statLabel}>Minutes Total</Text>
                   {statsError && (
@@ -700,7 +713,11 @@ export default function WalksScreen() {
                 >
                   <MapPin color="#fff" size={24} />
                   <Text style={styles.statValue}>
-                    {!user || !session || !session?.access_token ? 'Sign In' : statsLoading ? '...' : statsError ? 'Error' : (userStats?.total_distance_km?.toFixed(1) ?? '0.0')}
+                    {!user || !session || !session?.access_token ? 'Sign In' : 
+                     session.expires_at && (session.expires_at * 1000) < Date.now() ? 'Expired' :
+                     statsLoading ? '...' : 
+                     statsError ? 'Error' : 
+                     (userStats?.total_distance_km?.toFixed(1) ?? '0.0')}
                   </Text>
                   <Text style={styles.statLabel}>Total km</Text>
                   {statsError && (

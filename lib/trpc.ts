@@ -182,7 +182,13 @@ export const createTRPCClient = (getToken?: () => Promise<string | null>) => {
               // Handle authentication errors specifically
               if (response.status === 401) {
                 console.error('[tRPC Fetch] Authentication error (401) - token may be invalid or expired');
-                throw new Error('Authentication required. Please sign in again.');
+                throw new Error('UNAUTHORIZED: Authentication required. Please sign in again.');
+              }
+              
+              // Handle forbidden errors
+              if (response.status === 403) {
+                console.error('[tRPC Fetch] Forbidden error (403) - insufficient permissions');
+                throw new Error('FORBIDDEN: Insufficient permissions. Please check your account status.');
               }
               
               // If we get HTML instead of JSON, it's likely a 404 or server error
