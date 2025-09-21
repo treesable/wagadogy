@@ -10,7 +10,7 @@ import {
   Image,
   Alert,
   Modal,
-  AppState as RNAppState,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { 
@@ -277,7 +277,7 @@ export default function WalksScreen() {
     };
 
     // For React Native, we can use AppState
-    const subscription = RNAppState.addEventListener('change', (nextAppState: string) => {
+    const subscription = AppState.addEventListener('change', (nextAppState: string) => {
       if (nextAppState === 'active') {
         handleFocus();
       }
