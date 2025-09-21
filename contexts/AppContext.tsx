@@ -1263,9 +1263,6 @@ export const [AppProvider, useApp] = createContextHook<AppState>(() => {
   const createConversation = useCallback(async (matchId: string): Promise<string> => {
     console.log('[createConversation] Starting for match:', matchId);
     console.log('[createConversation] Current conversations count:', conversations.length);
-    console.log('[createConversation] User ID:', user?.id);
-    console.log('[createConversation] Session exists:', !!session);
-    console.log('[createConversation] Session access token exists:', !!session?.access_token);
     
     // Check if conversation already exists for this match
     const localExisting = conversations.find(c => c.matchId === matchId);
@@ -1274,28 +1271,9 @@ export const [AppProvider, useApp] = createContextHook<AppState>(() => {
       return localExisting.id;
     }
 
-    // Verify user is authenticated before making tRPC call
-    if (!user) {
-      console.error('[createConversation] No user found - authentication required');
-      throw new Error('Authentication required. Please sign in again.');
-    }
-    
-    if (!session?.access_token) {
-      console.error('[createConversation] No valid session token found');
-      throw new Error('Session expired. Please sign in again.');
-    }
-    
-    // Check if session is expired
-    if (session.expires_at && session.expires_at * 1000 < Date.now()) {
-      console.error('[createConversation] Session token is expired');
-      throw new Error('Session expired. Please sign in again.');
-    }
-
     // Use tRPC to create conversation properly
     try {
       console.log('[createConversation] Creating conversation via tRPC for match:', matchId);
-      console.log('[createConversation] tRPC client exists:', !!authTrpcClient);
-      
       const created = await authTrpcClient.conversations.createConversation.mutate({
         matchId: matchId,
       });
@@ -1322,22 +1300,9 @@ export const [AppProvider, useApp] = createContextHook<AppState>(() => {
     } catch (e: any) {
       console.error('[createConversation] tRPC error:', e?.message ?? String(e));
       console.error('[createConversation] Full tRPC error:', e);
-      console.error('[createConversation] Error name:', e?.name);
-      console.error('[createConversation] Error code:', e?.code);
-      console.error('[createConversation] Error data:', e?.data);
-      
-      // Provide more specific error messages
-      if (e?.message?.includes('UNAUTHORIZED') || e?.message?.includes('Authentication required')) {
-        throw new Error('Authentication required. Please sign in again.');
-      } else if (e?.message?.includes('Network')) {
-        throw new Error('Network error. Please check your connection.');
-      } else if (e?.message?.includes('Match not found')) {
-        throw new Error('Match not found. Please try again.');
-      } else {
-        throw new Error(e?.message || 'Failed to create conversation. Please try again.');
-      }
+      throw e; // Re-throw the error so the caller can handle it
     }
-  }, [conversations, authTrpcClient, user, session]);
+  }, [conversations, authTrpcClient]);
 
   const getConversation = useCallback((conversationId: string): Conversation | undefined => {
     return conversations.find(conv => conv.id === conversationId);

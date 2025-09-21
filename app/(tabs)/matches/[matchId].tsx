@@ -85,129 +85,38 @@ export default function MatchDetailScreen() {
   }, [matchId, supabase]);
 
   const onStartChat = React.useCallback(async () => {
-    if (!profile || !user) {
-      console.error('[MatchDetail] Missing profile or user:', { profile: !!profile, user: !!user });
-      Alert.alert('Error', 'Missing profile or user information.');
-      return;
-    }
-    
+    if (!profile || !user) return;
     try {
       console.log('[MatchDetail] Starting chat for profile:', profile.id, 'owner:', profile.ownerId);
-      console.log('[MatchDetail] Current user:', user.id);
-      console.log('[MatchDetail] API Base URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
-      console.log('[MatchDetail] Network connectivity check starting...');
-      
-      // First, let's test basic network connectivity
-      try {
-        const testResponse = await fetch('https://httpbin.org/get', { 
-          method: 'GET'
-        });
-        console.log('[MatchDetail] Basic network test:', testResponse.ok ? 'SUCCESS' : 'FAILED');
-      } catch (networkError) {
-        console.error('[MatchDetail] Basic network test failed:', networkError);
-        Alert.alert('Network Error', 'No internet connection detected. Please check your network and try again.');
-        return;
-      }
-      
-      // Test API server connectivity
-      try {
-        const apiHealthUrl = `${process.env.EXPO_PUBLIC_RORK_API_BASE_URL}/api/health`;
-        console.log('[MatchDetail] Testing API health at:', apiHealthUrl);
-        const healthResponse = await fetch(apiHealthUrl, {
-          method: 'GET'
-        });
-        console.log('[MatchDetail] API health test:', healthResponse.ok ? 'SUCCESS' : 'FAILED');
-        if (!healthResponse.ok) {
-          console.error('[MatchDetail] API server not responding properly');
-          Alert.alert('Server Error', 'The server is not responding. Please try again later.');
-          return;
-        }
-      } catch (apiError) {
-        console.error('[MatchDetail] API health test failed:', apiError);
-        Alert.alert('Server Error', 'Cannot connect to the server. Please try again later.');
-        return;
-      }
       
       // Find the actual match ID from the matches table
       const { data: matchData, error: matchError } = await supabase
         .from('matches')
-        .select('id, user1_id, user2_id, matched_at')
+        .select('id')
         .or(`and(user1_id.eq.${user.id},user2_id.eq.${profile.ownerId}),and(user1_id.eq.${profile.ownerId},user2_id.eq.${user.id})`)
         .eq('is_active', true)
         .order('matched_at', { ascending: false })
         .limit(1)
         .single();
         
-      if (matchError) {
-        console.error('[MatchDetail] Error finding match:', matchError);
-        console.error('[MatchDetail] Match error details:', JSON.stringify(matchError, null, 2));
-        
-        if (matchError.code === 'PGRST116') {
-          Alert.alert('Error', 'No active match found between you and this user. Please try matching again.');
-        } else {
-          Alert.alert('Error', `Database error: ${matchError.message}`);
-        }
-        return;
-      }
-      
-      if (!matchData) {
-        console.error('[MatchDetail] No match data returned');
+      if (matchError || !matchData) {
+        console.error('[MatchDetail] No active match found:', matchError);
         Alert.alert('Error', 'No active match found. Please try again.');
         return;
       }
       
-      console.log('[MatchDetail] Found match:', matchData.id, 'between users:', matchData.user1_id, 'and', matchData.user2_id);
+      console.log('[MatchDetail] Found match:', matchData.id);
       
-      // Verify the current user is part of this match
-      const isUserInMatch = matchData.user1_id === user.id || matchData.user2_id === user.id;
-      if (!isUserInMatch) {
-        console.error('[MatchDetail] User not part of match:', { userId: user.id, match: matchData });
-        Alert.alert('Error', 'You are not authorized for this match.');
-        return;
-      }
-      
-      console.log('[MatchDetail] Creating conversation for match:', matchData.id);
       const conversationId = await createConversation(matchData.id);
       console.log('[MatchDetail] Created conversation:', conversationId);
       
-      if (!conversationId) {
-        console.error('[MatchDetail] No conversation ID returned');
-        Alert.alert('Error', 'Failed to create conversation. Please try again.');
-        return;
-      }
-      
       // Add a small delay to ensure the conversation is properly stored
       setTimeout(() => {
-        console.log('[MatchDetail] Navigating to chat:', conversationId);
         router.push(`/chat/${conversationId}`);
       }, 100);
     } catch (error: any) {
       console.error('[MatchDetail] Error starting chat:', error);
-      console.error('[MatchDetail] Error details:', {
-        message: error?.message,
-        name: error?.name,
-        stack: error?.stack?.substring(0, 500)
-      });
-      
-      let errorMessage = 'Failed to start chat. Please try again.';
-      
-      if (error?.message?.includes('Authentication required')) {
-        errorMessage = 'Please sign in again to start a chat.';
-      } else if (error?.message?.includes('Network')) {
-        errorMessage = 'Network error. Please check your internet connection and try again.';
-      } else if (error?.message?.includes('Match not found')) {
-        errorMessage = 'No active match found. Please try matching again.';
-      } else if (error?.message?.includes('fetch')) {
-        errorMessage = 'Connection failed. Please check your internet connection.';
-      } else if (error?.message?.includes('Server returned HTML')) {
-        errorMessage = 'Server configuration error. Please try again later.';
-      } else if (error?.message?.includes('JSON')) {
-        errorMessage = 'Server response error. Please try again later.';
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', 'Failed to start chat. Please try again.');
     }
   }, [profile, createConversation, user, supabase]);
 

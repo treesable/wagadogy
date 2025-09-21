@@ -15,10 +15,7 @@ export const clearAuthData = async (): Promise<void> => {
       'scheduledWalks',
       // Clear Supabase auth keys as well
       'sb-jzxabzfkvckivngombxu-auth-token',
-      'supabase.auth.token',
-      // Clear any other potential auth keys
-      'sb-auth-token',
-      'supabase-auth-token'
+      'supabase.auth.token'
     ]);
     console.log('Auth data cleared successfully');
   } catch (error) {

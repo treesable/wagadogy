@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { isRefreshTokenError, handleRefreshTokenError, clearAuthData } from '@/utils/authUtils';
+import { isRefreshTokenError, handleRefreshTokenError } from '@/utils/authUtils';
 
 interface AuthContextType {
   user: User | null;
@@ -48,60 +48,30 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          // If there's an error getting the session (like invalid refresh token),
-          // clear the stored session and redirect to login
-          if (isRefreshTokenError(error)) {
-            console.log('Invalid refresh token detected, clearing session...');
-            await handleRefreshTokenError(supabase);
-            setSession(null);
-            setUser(null);
-          } else {
-            // For other errors, still set the session if it exists
-            setSession(session);
-            setUser(session?.user ?? null);
-          }
-        } else {
-          setSession(session);
-          setUser(session?.user ?? null);
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      if (error) {
+        console.error('Error getting session:', error);
+        // If there's an error getting the session (like invalid refresh token),
+        // clear the stored session and redirect to login
+        if (isRefreshTokenError(error)) {
+          console.log('Invalid refresh token detected, clearing session...');
+          await handleRefreshTokenError(supabase);
         }
-      } catch (err) {
-        console.error('Error initializing auth:', err);
-        setSession(null);
-        setUser(null);
-      } finally {
-        setLoading(false);
       }
-    };
-    
-    initializeAuth();
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth state changed:', event, session?.user?.email || 'no user');
       
       // Handle token refresh errors
       if (event === 'TOKEN_REFRESHED' && !session) {
-        console.log('Token refresh failed, clearing auth data and signing out...');
-        await handleRefreshTokenError(supabase);
-        setSession(null);
-        setUser(null);
-        return;
-      }
-      
-      // Handle sign out event
-      if (event === 'SIGNED_OUT') {
-        console.log('User signed out, clearing auth data...');
-        await clearAuthData();
-        setSession(null);
-        setUser(null);
-        return;
+        console.log('Token refresh failed, signing out...');
+        supabase.auth.signOut();
       }
       
       setSession(session);
