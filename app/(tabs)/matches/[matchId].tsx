@@ -94,6 +94,39 @@ export default function MatchDetailScreen() {
     try {
       console.log('[MatchDetail] Starting chat for profile:', profile.id, 'owner:', profile.ownerId);
       console.log('[MatchDetail] Current user:', user.id);
+      console.log('[MatchDetail] API Base URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
+      console.log('[MatchDetail] Network connectivity check starting...');
+      
+      // First, let's test basic network connectivity
+      try {
+        const testResponse = await fetch('https://httpbin.org/get', { 
+          method: 'GET'
+        });
+        console.log('[MatchDetail] Basic network test:', testResponse.ok ? 'SUCCESS' : 'FAILED');
+      } catch (networkError) {
+        console.error('[MatchDetail] Basic network test failed:', networkError);
+        Alert.alert('Network Error', 'No internet connection detected. Please check your network and try again.');
+        return;
+      }
+      
+      // Test API server connectivity
+      try {
+        const apiHealthUrl = `${process.env.EXPO_PUBLIC_RORK_API_BASE_URL}/api/health`;
+        console.log('[MatchDetail] Testing API health at:', apiHealthUrl);
+        const healthResponse = await fetch(apiHealthUrl, {
+          method: 'GET'
+        });
+        console.log('[MatchDetail] API health test:', healthResponse.ok ? 'SUCCESS' : 'FAILED');
+        if (!healthResponse.ok) {
+          console.error('[MatchDetail] API server not responding properly');
+          Alert.alert('Server Error', 'The server is not responding. Please try again later.');
+          return;
+        }
+      } catch (apiError) {
+        console.error('[MatchDetail] API health test failed:', apiError);
+        Alert.alert('Server Error', 'Cannot connect to the server. Please try again later.');
+        return;
+      }
       
       // Find the actual match ID from the matches table
       const { data: matchData, error: matchError } = await supabase
@@ -161,9 +194,15 @@ export default function MatchDetailScreen() {
       if (error?.message?.includes('Authentication required')) {
         errorMessage = 'Please sign in again to start a chat.';
       } else if (error?.message?.includes('Network')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
+        errorMessage = 'Network error. Please check your internet connection and try again.';
       } else if (error?.message?.includes('Match not found')) {
         errorMessage = 'No active match found. Please try matching again.';
+      } else if (error?.message?.includes('fetch')) {
+        errorMessage = 'Connection failed. Please check your internet connection.';
+      } else if (error?.message?.includes('Server returned HTML')) {
+        errorMessage = 'Server configuration error. Please try again later.';
+      } else if (error?.message?.includes('JSON')) {
+        errorMessage = 'Server response error. Please try again later.';
       } else if (error?.message) {
         errorMessage = error.message;
       }
