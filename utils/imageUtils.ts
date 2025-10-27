@@ -227,7 +227,7 @@ export async function uploadImageToSupabase(
     } else {
       // For mobile, read the file as base64 and convert to ArrayBuffer
       const base64 = await FileSystem.readAsStringAsync(optimizedImage.uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
       
       // Convert base64 to ArrayBuffer
@@ -313,7 +313,7 @@ export async function uploadImageToSupabaseAuth(
       fileData = await response.arrayBuffer();
     } else {
       const base64 = await FileSystem.readAsStringAsync(optimizedImage.uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
       
       const binaryString = atob(base64);
